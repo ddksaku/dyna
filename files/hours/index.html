@@ -1,0 +1,60 @@
+<div data-role="header">
+	<div id="customerLogoContainer" class="textAlignCenter">
+		<img src="{{logo}}"/>
+		<button id="logOutButton"
+			class="ui-btn ui-shadow ui-corner-all ui-icon-home ui-btn-icon-notext ui-btn-left"></button>
+		<button id="gotoSyncPageButton"
+			class="ui-btn ui-shadow ui-corner-all ui-icon-bars ui-btn-icon-notext ui-btn-right"></button>
+	</div>
+</div>
+
+<div data-role="content">
+	<h2>{{Hour registration}}</h2>
+	<div class="ui-field-contain">
+		<label for="user">{{User}}:</label>
+		<select name="user" id="user" data-mini="true">
+			<option value="small">Herbert</option>
+			<option value="medium">Jan Rune</option>
+			<option value="large">Steinar</option>
+		</select>
+		
+		<label for="date">{{Date}}:</label>
+		<input name="date" id="date" type="text" data-role="date" data-inline="true" />
+		
+        <label for="time_from">{{Time From}}:</label>
+		<input name="time_from" id="time_from" type="text" data-role="datebox" 
+			data-options='{"mode":"timebox", "overrideTimeFormat": 24, "themeInput": "a"}' />
+		
+        <label for="time_until">{{Time Until}}:</label>
+		<input name="time_until" id="time_until" type="text" data-role="datebox" 
+			data-options='{"mode":"timebox", "overrideTimeFormat": 24, "themeInput": "a"}' />
+		
+		<label for="code">{{Code}}:</label>
+		<select name="code" id="code" data-mini="true">
+			<option value="10">Ordinær arbeidstid</option>
+			<option value="10.D">Deltid</option>
+			<option value="10.OF">Overtid 100%</option>
+			<option value="10.OH">Overtid 50%</option>
+			<option value="20.F">Ferie</option>
+			<option value="20.H">Helligdag</option>
+			<option value="20.S">Skoft</option>
+			<option value="20.SF">Småfravær (ikke RTV)</option>
+			<option value="30.BML">Barns sykdom med lønn</option>
+			<option value="30.BUL">Barns sykdom uten lønn</option>
+			<option value="30.E">Egenmelding</option>
+			<option value="30.LUL">Langtidssyk uten lønn</option>
+			<option value="30.ML">Syk med lønn</option>
+			<option value="30.UL">Syk uten lønn</option>
+			<option value="40.K">Kurs</option>
+			<option value="40.M">Mal</option>
+			<option value="40.R">Reise</option>
+			<option value="50.LUL">Langtidsperm. uten lønn</option>
+			<option value="50.ML">Permisjon med lønn</option>
+			<option value="50.UL">Permisjon uten lønn</option>
+		</select>
+
+		<label for="comment">{{Comment}}:</label>
+		<input type="text" name="comment" id="comment" value="">
+	</div>
+
+</div>

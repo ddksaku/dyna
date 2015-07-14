@@ -1,0 +1,58 @@
+<div data-role="header">
+    <div id="customerLogoContainer" class="textAlignCenter">
+        <img src="files/logo.png" />
+    </div>                    
+</div>
+
+<div data-role="content">                    
+    <button id="blastPlanButton" class="ui-btn ui-btn-corner-all">Blast Plan</button>
+    <button id="debugButton" class="ui-btn ui-btn-corner-all">Debug</button> 
+    <button id="deviationButton" class="ui-btn ui-btn-corner-all">Deviation</button> 
+    <button id="hoursButton" class="ui-btn ui-btn-corner-all">Hours</button> 
+    <button id="punchCardButton" class="ui-btn ui-btn-corner-all">Punch Card</button>                             
+    <button id="stockButton" class="ui-btn ui-btn-corner-all">Stock</button> 
+    <button id="syncButton" class="ui-btn ui-btn-corner-all">Sync</button> 
+    <button id="transportButton" class="ui-btn ui-btn-corner-all">Transport</button> 
+</div>
+
+<script type="text/javascript">
+var loaded = false;
+$(document).ready(function() {
+	if (!loaded) {
+		$('#blastPlanButton').on('click', function() {
+			app.loadFile('blastplan/index.html');
+		});
+
+		$('#debugButton').on('click', function() {
+			app.loadFile('debug/index.html');
+		});
+
+		$('#deviationButton').on('click', function() {
+			app.loadFile('deviation/index.html');
+		});
+
+		$('#hoursButton').on('click', function() {
+			app.loadFile('hours/index.html');
+		});
+
+		$('#punchCardButton').on('click', function() {
+			app.loadFile('punchCard/index.html');
+		});
+
+		$('#stockButton').on('click', function() {
+			app.loadFile('stock/index.html');
+		});
+
+		$('#syncButton').on('click', function() {
+			app.loadFile('sync/index.html');
+		});
+
+		$('#transportButton').on('click', function() {
+			app.loadFile('transport/index.html');
+		});     
+
+		// Prevent this from happening twice
+		loaded = true;
+	}
+});
+</script>

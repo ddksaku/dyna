@@ -1,0 +1,33 @@
+<div data-role="header">
+	<h1>DEBUG</h1>
+	<a href="#" id="gotoSyncPageButton"
+	   class="ui-btn ui-shadow ui-corner-all ui-icon-back ui-btn-icon-notext ui-btn-left">                       
+	</a>
+</div>
+
+<div data-role="content">    
+	<div data-role="collapsible" data-collapsed-icon="carat-d" data-expanded-icon="carat-u" data-iconpos="right">
+		<h4>FILES</h4>
+		<p>TODO</p>
+	</div>              
+
+	<div data-role="collapsible" data-collapsed-icon="carat-d" data-expanded-icon="carat-u" data-iconpos="right">
+		<h4>DATABASE - LOCAL STORAGE</h4>
+		<table data-role="table" data-mode="columntoggle" class="ui-responsive table-stroke">
+			<thead>
+				<tr>
+					<th>Key</th>                                    
+					<th data-priority="1">Value</th>
+				</tr>
+			</thead>
+			<tbody>
+				{{#each this}}
+				<tr>                                    
+					<td>{{key}}</td>
+					<td>{{value}}</td>
+				</tr>   
+				{{/each}}
+			</tbody>
+		</table>
+	</div>                  
+</div>

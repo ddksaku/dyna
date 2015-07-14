@@ -1,0 +1,170 @@
+<div data-role="header">
+	<h1>Punch Card</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Tilbake</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Meny</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true" style="min-width: 210px;">
+			<li data-role="list-divider">Meny</li>			
+			<li><a id="menuEdit">Rediger</a></li>
+			<li><a id="menuArchive">Arkiver</a></li>
+			<li><a id="menuDelete">Fjern</a></li>
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+	<form>		        
+        <label for="user_name">User Name</label>
+		<input type="text" name="user_name" id="user_name">
+        
+        <label for="date_time">Time</label>
+        <input type="text" name="date_time" id="date_time">        
+            
+		<label for="lat_long">Latitude / Longitude</label>
+		<input type="text" name="lat_long" id="lat_long">         
+        
+		<label for="comment">Comment</label>
+		<textarea name="comment" id="comment"></textarea>         
+        
+        <fieldset data-role="controlgroup" data-type="horizontal" style="text-align: right;">                      
+            <input type="radio" name="code" id="code-in" value="1">
+            <label for="code-in">Check In</label>
+            <input type="radio" name="code" id="code-out" value="0">
+            <label for="code-out">Check Out</label>            
+        </fieldset>
+	</form>
+</div>
+
+<script>
+// info will hold the punch card information
+var info = {};
+
+function showInfo() {
+    $('#user_name').text(info.user_name);    
+	$.each(info, function(i, v) {		
+        var el = $(':input[name = "' + i +'"]');
+        if (el.length > 0) {     
+            if (el.prop('type').toLowerCase() == 'radio') {
+                el.filter('[value = "' + v + '"]').prop('checked', true);
+                el.checkboxradio('refresh');
+            } else {
+                el.val(v);
+            }            
+        }		        
+	});           
+    
+	// We're viewing
+	$(':input').prop('disabled', true);
+}
+
+function loadInfo(id) {
+	// Load the record, call showInfo() when done      
+	database.db.transaction(
+		function(tx) {
+			// Note: || is to concatenate strings in sqlite
+			tx.executeSql(
+				'SELECT pc.*, u.username FROM punch_card pc LEFT JOIN user u ON pc.fk_user = u.id WHERE pc.id = ?',
+				[id],
+				function(tx, result) {
+					try {                                         
+						r = result.rows.item(0);
+						info = {
+							'id' : r.id,
+							'fk_user' : r.fk_user,
+                            'user_name': r.username,
+							'date_time':  r.date_time,
+							'lat_long' : r.lat_long,
+							'code': r.code,							
+							'comment' : r.comment							
+						};	                        
+					} catch (e) {                                 
+						alert('error: ' + e.message);
+					}
+				}
+			);
+		},
+		function(error) {
+			app.showAlert('Det oppsto en feil: ' + error.message);
+			logHelper.error('punchCard/index.html', 'loadInfo', error.message);
+		},
+		function(success) {
+			showInfo();
+		}
+	);
+}
+
+function deleteInfo() {
+	database.db.transaction(
+		function(tx) {
+			tx.executeSql('DELETE FROM punch_card WHERE id = ?', [app.id]);		
+		},
+		function(error) {
+			app.showAlert('Det oppsto en feil: ' + error.message);
+			logHelper.error('punchCard/index.html', 'deleteInfo', error.message);
+		},
+		function(success) {
+			app.showAlert('Informasjonen er nå fjernet.');
+			delete app.id;
+			app.loadFile('main/index.html');
+		}
+	);
+}
+
+function archiveInfo() {    
+	database.db.transaction(
+		function(tx) {
+			tx.executeSql('UPDATE punch_card SET archived = datetime() WHERE id = ?', [app.id]);
+		},
+		function(error) {
+			app.showAlert('Det oppsto en feil: ' + error.message);
+			logHelper.error('punchCard/index.html', 'archiveInfo', error.message);
+		},
+		function(success) {
+			app.showAlert('Informasjonen er nå arkivert.');
+			delete app.id;
+			app.loadFile('main/index.html');
+		}
+	);
+}
+
+var loaded = false;
+$(document).ready(function() {
+	if(!loaded) {
+		try {                               
+			// Load and display the document 
+			loadInfo(app.id);                                                      
+            
+			// Register actions
+			$('#buttonMain').on('click',function() {
+				app.loadFile('main/index.html');
+			});
+            
+			$('#buttonMenu').on('click',function() {
+				$('#menu').popup({'history': false});
+				$('#menu').popup('open');
+			});
+
+			$('#menuEdit').on('click', function() {
+				app.loadFile('punchCard/edit.html');
+			});                        
+            
+			$('#menuArchive').on('click',function() {                                
+				if (confirm('Er du sikker du vil arkivere informasjonen?')) {
+					archiveInfo();
+				}
+			});
+            
+			$('#menuDelete').on('click',function() {
+				if (confirm('Er du sikker du vil fjerne informasjonen?')) {
+					deleteInfo();
+				}
+			});
+
+			// Prevent this from happening twice
+			loaded = true;
+		} catch(error) {
+			app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' + error.message);
+		}
+	}
+});
+</script>

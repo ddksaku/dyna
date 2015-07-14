@@ -1,0 +1,229 @@
+<div data-role="header">
+	<h1>Sjekk ut/inn</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Tilbake</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Meny</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true" style="min-width:210px;">
+			<li data-role="list-divider">Meny</li>
+			<li><a id="menuTransport">Lag transportdok</a></li>
+			<li><a id="menuEdit">Rediger</a></li>
+			<li><a id="menuArchive">Arkiver</a></li>
+			<li><a id="menuDelete">Fjern</a></li>
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+	<form>
+		<fieldset data-role="controlgroup" data-type="horizontal" data-mini="true">
+			<label for="check_inout_out">Ut</label>
+			<input type="radio" name="check_inout" id="check_inout_out" value="out" checked="checked">
+			<label for="check_inout_in">Inn</label>
+			<input type="radio" name="check_inout" id="check_inout_in" value="in">
+			<label for="check_inout_other">Annet</label>
+			<input type="radio" name="check_inout" id="check_inout_other" value="other">
+		</fieldset>
+
+		<label for="project">Prosjekt</label>
+		<input type="text" name="project" id="project">
+
+		<label for="location">Lagersted</label>
+		<input type="text" name="location" id="location">
+
+		<label for="date">Dato</label>
+		<input type="text" name="date" id="date">
+
+		<label for="comment">Kommentar</label>
+		<textarea name="comment" id="comment"></textarea>
+
+		<div class="table-responsive">
+			<table class="table table-striped table-hover table-condensed table-bordered" style="overflow: scroll">
+				<thead>
+					<tr>
+						<th colspan="2">Vare</th>
+						<th>Enhet</th>
+						<th>Antall</th>
+					</tr>
+				</thead>
+				<tbody id="lines"></tbody>
+			</table>
+		</div>
+	</form>
+</div>
+
+<script>
+// info will hold the document information
+var info = {};
+
+function showInfo(){
+	$.each( info, function(i,v){
+		if( i == 'lines' ){
+			// Special treatment for this repeating group
+			var cnt = 0;
+			$.each( info.lines, function(i2,v2){
+				showLine( cnt++, v2 );
+			});
+		} else {
+			var el = $(':input[name="' +i +'"]');
+			if( el.length > 0 ) {
+				if( el.prop('type').toLowerCase() == 'radio' ) {
+					el.filter('[value="' +v +'"]').prop('checked',true);
+					el.checkboxradio('refresh');
+				} else {
+					el.val(v);
+				}
+			}
+		}
+	});
+
+	// We're viewing
+	$(':input').prop('disabled', true);
+}
+
+function showLine( id, v ){
+	$('#lines').append(
+		'<tr id="row_' +id +'">' +
+		'<td colspan="2">' +v.sku +
+		'<td>' +v.unit +
+		'<td>' +v.amount
+	);
+}
+
+function loadInfo(id){
+	// Load the record, call showInfo() when done
+	database.db.transaction(
+		function(tx){
+			// Note: || is to concatenate strings in sqlite
+			tx.executeSql(
+				'SELECT s.*,p.number || ": " || p.description as project,sl.* FROM stock s LEFT JOIN project p ON s.fk_project=p.number LEFT JOIN stock_lines sl ON s.id=sl.fk_stock WHERE s.id=?',
+				[id],
+				function(tx, result){
+					try {
+						r = result.rows.item(0);
+						info = {
+							'id' : r.id,
+							'fk_user' : r.fk_user,
+							'check_inout' : r.check_inout,
+							'location' : r.location,
+							'project': r.project,
+							'date' : r.date,
+							'comment' : r.comment,
+							'lines' : {}
+						};
+						for( cnt=0; cnt<result.rows.length; cnt++ ){
+							r = result.rows.item(cnt);
+							if( r.sku != null ) {
+								info.lines['row_'+cnt] = {
+									'fk_product' : r.fk_product,
+									'sku' : r.sku,
+									'unit' : r.unit,
+									'amount' : r.amount
+								}
+							}
+						}
+					} catch(e) {
+						alert(' error: ' +e.message );
+					}
+				}
+			);
+		},
+		function(error) {
+			app.showAlert( 'Det oppsto en feil: ' +error.message);
+			logHelper.error( 'stock/index.html', 'loadInfo', error.message );
+		},
+		function(success) {
+			showInfo();
+		}
+	);
+}
+
+function deleteInfo(){
+	database.db.transaction(
+		function(tx){
+			tx.executeSql('DELETE FROM stock WHERE id=?', [app.id]);
+			tx.executeSql('DELETE FROM stock_lines WHERE fk_stock=?', [app.id]);
+			// Make either the transport source available again
+			tx.executeSql('UPDATE transport SET archived=NULL WHERE id=?', [info.fk_transport]);
+		},
+		function(error) {
+			app.showAlert( 'Det oppsto en feil: ' +error.message );
+			logHelper.error( 'stock/index.html', 'deleteInfo', error.message );
+		},
+		function(success) {
+			app.showAlert( 'Informasjonen er nå fjernet.' );
+			delete app.id;
+			app.loadFile( 'main/index.html' );
+		}
+	);
+}
+
+function archiveInfo(){
+	database.db.transaction(
+		function(tx){
+			tx.executeSql('UPDATE stock SET archived=datetime() WHERE id=?', [app.id]);
+		},
+		function(error){
+			app.showAlert( 'Det oppsto en feil: ' +error.message );
+			logHelper.error( 'stock/index.html', 'archiveInfo', error.message );
+		},
+		function(success){
+			app.showAlert( 'Informasjonen er nå arkivert.' );
+			delete app.id;
+			app.loadFile('main/index.html');
+		}
+	);
+}
+
+var loaded = false;
+$(document).ready(function(){
+	if( !loaded ) {
+		try{
+			// Load and display the document
+			loadInfo( app.id );
+
+			// Register actions
+			$('#buttonMain').on('click',function(){
+				app.loadFile('main/index.html');
+			});
+			$('#buttonMenu').on('click',function(){
+				// Hide or show the transport option based on the value of the check-in/out field
+				if( $(':radio[name="check_inout"]:checked').val() == 'out' ) {
+					$('#menuTransport').show();
+				} else {
+					$('#menuTransport').hide();
+				}
+				$('#menu').popup({'history':false});
+				$('#menu').popup('open');
+			});
+
+			$('#menuTransport').on('click',function(){
+				// Instruct the transport script to get the info from this stock document
+				app.transport_id = app.id;
+				app.transport_source = 'stock';
+				// Delete the id so the transport script knows we want to create a new document
+				delete app.id;
+				// Load the transport document interface
+				app.loadFile('transport/edit.html');
+			});
+			$('#menuEdit').on('click',function(){
+				app.loadFile('stock/edit.html');
+			});
+			$('#menuArchive').on('click',function(){
+				if( confirm( 'Er du sikker du vil arkivere informasjonen?' )) {
+					archiveInfo();
+				}
+			});
+			$('#menuDelete').on('click',function(){
+				if( confirm( 'Er du sikker du vil fjerne informasjonen?' )) {
+					deleteInfo();
+				}
+			});
+
+			// Prevent this from happening twice
+			loaded = true;
+		} catch(error){
+			app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' +error.message);
+		}
+	}
+});
+</script>

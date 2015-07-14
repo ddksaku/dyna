@@ -1,0 +1,701 @@
+<style>
+    .blast-icons img { margin-right: 2%; cursor: pointer; }
+    .blast-icons img:hover { opacity: 0.1; }
+    .blast-icons img.active { opacity: 0.1; }
+
+    .marker-action { display: block; }
+    .marker-action .save { width: 49%; float: left; }
+    .marker-action .remove { width: 49%; float: right; }   
+</style>
+
+<div data-role="header">
+	<h1>Blast Plan</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Back</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Menu</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true">
+			<li data-role="list-divider">Meny</li>
+			<li><a id="menuSave">Save</a></li>			
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+     <div class="col-xs-8">
+        <div id="map-canvas">
+            <!-- map loads here... -->                
+        </div>        	
+    </div>
+
+    <div class="col-xs-4">
+        <div class="panel panel-default">
+            <div class="panel-heading">Details</div>
+
+            <div class="panel-body">
+                <label for="project">Project</label>
+                <table width="100%">
+                    <tr>
+                        <td style="width:100%">
+                            <div class="project">
+                                <select name="fk_project" id="fk_project" data-mini="true"></select>
+                            </div>
+                        <div data-role="controlgroup" class="project_text">
+                            <div class="ui-body ui-body-a ui-corner-all">
+                                <table width="100%">
+                                    <tr>
+                                        <td>Number</td>
+                                        <td>
+                                            <input type="text" name="project_number" id="project_number" data-clear-btn="true">
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Description</td>
+                                        <td>
+                                            <input type="text" name="project_description" id="project_description" data-clear-btn="true">
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Location</td>
+                                        <td>
+                                            <input type="text" name="project_location" id="project_location" data-clear-btn="true">
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        </td>
+                        <td>
+                            <a id="switchProject" href="#" class="switcher ui-btn ui-shadow ui-corner-all ui-icon-edit ui-btn-icon-notext">Switch</a>
+                        </td>
+                    </tr>
+                </table>
+                
+                <label for="date">Date</label>
+                <input type="datetime" class="datepicker" data-date-format="yyyy-mm-dd" name="date" id="date" readonly="true" />
+
+                <label for="comment">Comment</label>
+                <textarea name="comment" id="comment"></textarea>        
+            </div>
+        </div>
+        
+        <div class="panel panel-default">
+            <div class="panel-heading">Icons</div>
+
+            <div class="panel-body">
+               <div class="blast-icons">
+                    <img src="img/markers/marker-evacuation.png" data-type="evacuation" alt="Evacuation">
+                    <img src="img/markers/marker-explosion.png" data-type="explosion" alt="Explosion">
+                    <img src="img/markers/marker-information.png" data-type="information" alt="Information">
+                    <img src="img/markers/marker-sensor.png" data-type="sensor" alt="Sensor">
+                    <img src="img/markers/marker-traffic.png" data-type="traffic" alt="Traffic">
+                    <img src="img/markers/marker-other.png" data-type="other" alt="Other">
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-default" id="blast-properties">
+            <div class="panel-heading">Properties</div>
+            <div class="panel-body">
+                <div id="empty-blast-property" style="display: none;">No requirements for this type.</div>
+                <div>
+                    <div class="blast-property" style="display: none;">
+                        <label for="name">Name</label>
+                        <input type="text" id="name">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="sensor-id">Sensor ID</label>
+                        <input type="number" id="sensor-id">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="person">Person responsible</label>
+                        <input type="text" id="person">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="document-id">Document ID</label>
+                        <input type="number" id="document-id">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="comment">Comment</label>
+                        <textarea name="comment" id="comment" rows="6"></textarea>
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="phones">Mobile phone numbers</label>
+                        <textarea name="phones" id="phones" rows="6"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="marker-action">
+            <button class="save" style="display: none;">Save</button>
+            <button class="remove" style="display: none;">Remove</button>
+        </div>
+    </div>
+</div>
+
+<script>    
+    var map,
+        markers = [],
+        currentMarker = null;
+
+    var $markerSaveButton = $('.marker-action .save'),
+        $markerRemoveButton = $('.marker-action .remove'),
+        $blastIcons = $('.blast-icons'),
+        $blastProperties = $('#blast-properties');
+
+    var blastProperties = {
+        evacuation: [ 'document-id', 'comment' ],
+        explosion: [ 'comment' ],
+        information: [ 'name', 'phones', 'comment' ],
+        sensor: [ 'comment', 'sensor-id', 'person' ],
+        traffic: [ 'name', 'phones', 'comment' ],
+        other: [ 'comment' ]
+    };
+    
+    // info will hold the document information - default values go here
+    var info = {
+        'date': new Date().toISOString().substr(0,10),
+        'lines': {}
+    };    
+    
+    // Some tables will be loaded on document ready so they are available for reference
+    var lookups = {        
+        'project': {
+            'sql': 'SELECT number, description, location FROM project WHERE archived IS NULL ORDER BY number, description',
+            'key': 'number',
+            'rows': {}
+        }
+    };
+    
+    // This tells what selects to load from the database, and how to format the values
+    var select = [
+        {
+            'id': 'fk_project',
+            'query': 'SELECT number, description, location FROM project WHERE archived IS NULL ORDER BY number, description',
+            'text': function(o) { return o.number + ': ' + o.description + ' (' +o.location +')' },
+            'val': function(o) { return o.number }
+        }
+    ];
+        
+    var loaded = false;
+    $(document).ready(function() {
+        if (!loaded) {  
+            try {
+                initMap();           
+                // loadIcons();
+                registerActions();  
+                
+                // Load the lookup-info into arrays - so this info is available e.g. when selecting a product group, adding lines (product) or selecting a project
+                $.each(lookups, function(i, v) {
+                    database.db.transaction(
+                        function(tx) {
+                            tx.executeSql(
+                                lookups[i].sql,
+                                [],
+                                function(tx, result) {
+                                    for(var index=0; index < result.rows.length; index++) {
+                                        keyvalue = result.rows.item(index)[lookups[i].key];
+                                        lookups[i].rows[keyvalue] = result.rows.item(index);
+                                    }
+                                }
+                            );
+                        },
+                        function(error){
+                            app.showAlert('Det oppsto en feil: ' + error.message);
+                            logHelper.error('blastplan/edit.html', 'ready', error.message);
+                        }
+                    );
+                });
+
+                // Load select-values, when done continue
+                prepLoad(select, function() {
+                    // Load and display the document
+                    if (typeof app.id != 'undefined') {
+                        // Loading an existing document
+                        loadInfo(app.id);
+                    } else {
+                        // Create it on demand, unrelated to anything else
+                        showInfo();                        
+                    }
+                });
+
+                // Install date picker
+                $('.datepicker').datepicker({ orientation: 'top left', autoclose: true });                              
+
+                // Register actions
+                $('#buttonMain').on('click', function() {
+                    if(typeof app.id == 'undefined') {
+                        app.loadFile('main/index.html');					
+                    } else {
+                        // We were editing a document and were viewing it earlier
+                        app.loadFile('punchCard/index.html');
+                    }
+                });
+
+                $('#buttonMenu').on('click', function() {				
+                    $('#menu').popup({ history: false });
+                    $('#menu').popup('open');
+                });		
+
+                $('#menuSave').on('click', function() {                    
+                    saveInfo();
+                });
+                
+                // The project is a combo - hide the text inputs
+                $('#switchProject').on('click',function(){
+                    switchSelectText('project');
+                });
+                $('div.project_text').hide();
+
+                // If a project is selected, set the project number, name and location
+                $('#fk_project').on('change', function() {
+                    p = lookups.project.rows[$(this).val()];
+                    if (typeof p == 'undefined') {
+                        p = { 'number': '', 'description': '', 'location': '' };
+                    }
+                    $('#project_number').val(p.number);
+                    $('#project_description').val(p.description);
+                    $('#project_location').val(p.location);
+                });
+
+                // Prevent this from happening twice
+                loaded = true;            
+            } catch(error) {
+                app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' + error.message);
+            }
+        }
+    });
+    
+    function initMap() {        
+        var mapOptions = { 
+            zoom: 4,
+            center: new google.maps.LatLng(-25.363882, 131.044922) // Austria
+        };
+        map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+
+        google.maps.event.addListener(map, 'click', function(e) {
+            addMarker(e.latLng, map);
+        });
+
+        var mapHeight = $(window).height();
+        $('#map-canvas').css('height', mapHeight);
+    }
+
+    function registerActions() {
+        // icon click action
+        $blastIcons.find('img').each(function() { 
+            $(this).click(function() {
+                $blastIcons.find('img').removeClass('active');
+                $(this).toggleClass('active');
+
+                var type = $(this).attr('data-type');
+                initBlastProperties();
+                toggleBlastProperties(blastProperties[type]);
+            });
+        });
+
+        $markerSaveButton.on('click', saveMarker);
+        $markerRemoveButton.on('click', removeMarker);
+    }
+    
+    function loadIcons() {
+        $.each(blastProperties, function(key, value) {            
+            var iconPath = fileHelper.rootDirectoryPath + app.localRootDirectory + 'blastplan/icons/marker-' + key + '.png';              
+            $('img[data-type="' + key + '"]').attr('src', iconPath);
+        });        
+    }
+    
+    function initBlastProperties() {
+        $blastProperties.find('input, textarea').val('');
+    }
+
+    function toggleBlastProperties(fields, values) {
+        $blastProperties.find('.blast-property').hide();
+
+        fields.forEach(function(id) {
+            var $field = $blastProperties.find('[id=' + id + ']');
+            $field.first().closest('.blast-property').show();
+
+            if (typeof values != 'undefined' && typeof values[id] != 'undefined') {
+                $field.val(values[id]);
+            }
+        });
+    }
+       
+    function retriveMarker(line, map) {  
+        try {                   
+            var iconPath = 'img/markers/marker-' + line.icon_type + '.png';                          
+            var position = new google.maps.LatLng(line.lat, line.lng);
+
+            var marker = new google.maps.Marker({
+                position: position,
+                icon: iconPath,
+                draggable: true,
+                map: map
+            });
+            
+            marker.properties = JSON.parse(line.content);                                               
+            marker.iconType = line.icon_type;
+
+            google.maps.event.addListener(marker, 'click', function(e) {
+                currentMarker = marker;
+                toggleBlastProperties(blastProperties[line.icon_type], marker.properties);
+
+                $markerSaveButton.show();
+                $markerRemoveButton.show();
+            });
+
+            markers.push(marker);
+        } catch (error) {
+            app.showAlert('error: ' + error.message);
+        }
+    }
+    
+    function addMarker(position, map) {
+        var $currentIcon = $blastIcons.find('img.active');
+        var iconPath = $currentIcon.attr('src'),
+            iconType = $currentIcon.attr('data-type');
+
+        if (typeof iconPath == 'undefined') {
+            return;
+        }
+
+        var marker = new google.maps.Marker({
+            position: position,
+            icon: iconPath,
+            draggable: true,
+            map: map
+        });
+
+        // initialize property items to empty string
+        marker.properties = {};
+        blastProperties[iconType].forEach(function(id) {
+            marker.properties[id] = '';
+        });        
+        marker.iconType = iconType;
+
+        currentMarker = marker;
+        google.maps.event.addListener(marker, 'click', function(e) {
+            currentMarker = marker;
+            toggleBlastProperties(blastProperties[iconType], marker.properties);
+
+            $markerSaveButton.show();
+            $markerRemoveButton.show();
+        });
+
+        markers.push(marker);
+        
+        $markerSaveButton.show();
+        $markerRemoveButton.show();
+    }
+
+    function saveMarker() {
+        if (currentMarker !== null) {
+            $.each(currentMarker.properties, function(key, value) {
+                currentMarker.properties[key] = $blastProperties.find('[id=' + key + ']').val();
+            });
+        }
+    }
+
+    function removeMarker() {
+        if (currentMarker !== null) {
+            removeItem(markers, currentMarker);
+            currentMarker.setMap(null);
+            currentMarker = null;
+
+            $markerSaveButton.hide();
+            $markerRemoveButton.hide();
+        }
+    }
+
+    function removeItem(list, item) {
+        var index = list.indexOf(item);
+
+        if (index >= 0) {
+            list.splice(index, 1);
+        }
+    }
+    
+    function synchronizeInfo(infoType, cb_success, cb_error) {
+        $.ajax({
+            url: 'http://' + app.serverAddress + '/info_put_record.php',
+            data: {
+                username: app.user.name,
+                password: app.user.password,
+                table: infoType,
+                json: JSON.stringify(info).replace(/\'null\'/g, 'null')	// convert 'null' to null
+            },
+            success: function(data, status, xhr) {
+                cb_success();
+            },
+            timeout: function(){
+                cb_error();
+            }
+        });
+    }
+    
+    function prepLoad(select, done_cb) {
+        i = select.shift();
+        database.db.transaction(
+            function(tx) {
+                tx.executeSql(
+                    i.query,
+                    [],
+                    function(tx, result) {
+                        var el = $('#' + i.id);
+                        el.empty();
+                        $('<option>').text('').val(0).appendTo(el);
+                        for(var index=0; index < result.rows.length; index++) {
+                            r = result.rows.item(index);
+                            $('<option>').text(i.text(r)).val(i.val(r)).appendTo(el);
+                        }
+                        
+                        if (select.length > 0) {
+                            prepLoad(select, done_cb);
+                        } else {
+                            done_cb();
+                        }
+                    }
+                );
+            }
+        );
+    }
+    
+    function switchSelectText(elName) {
+        // The two inputs are within divs (with class names) because jQuery Mobile adds various embedding elements
+        $('div.' + elName).toggle();
+        $('div.' + elName + '_text').toggle();
+    }
+
+    function showInfo() {
+        $.each(info, function(i, v) {
+            if (i == 'lines') {                                
+                $.each(info.lines, function(i2, v2){
+                    retriveMarker(v2, map);
+                });               
+            } else {
+                var el = $(':input[name="' + i + '"]');
+                if (el.length > 0) {
+                    if (el.prop('tagName').toLowerCase() == 'select') {
+                        // See if the value exists in the list
+                        var exists = false;
+                        el.find('option').each(function() {
+                            if (this.value == v) {
+                                exists = true;
+                            }
+                        });
+                        if (exists) {
+                            // Select that value
+                            el.val(v).change();
+                        } else {
+                            // Add the value to the select
+                            if (v != '') {
+                                el.append( $('<option>').val(v).text(v));	//.prop('selected','selected'));
+                                el.val(v).change();
+                            }
+                        }
+                    } else {
+                        el.val(v);
+                    }
+                }
+            }
+        });   
+    }
+
+    function loadInfo(id) {
+        // Load the record, call showInfo() when done
+        if (typeof id == 'undefined') {
+            id = '';
+        }
+        
+        if (id == '') {
+            showInfo();
+        } else {
+            // Load the record, call showInfo() when done
+            database.db.transaction(
+                function(tx) {
+                    var query = 'SELECT b.*, p.number || ": " || p.description as project, bl.*, b.id as id FROM blastplan b ' +
+                        'LEFT JOIN project p ON b.fk_project = p.number ' +  
+                        'LEFT JOIN blastplan_lines bl ON b.id = bl.fk_blastplan ' +
+                        'WHERE b.id = ?';
+
+                    // Note: || is to concatenate strings in sqlite
+                    tx.executeSql(query, 
+                        [id],
+                        function(tx, result) {
+                            try {
+                                // Copy all fields to info - because of the left join, we'll have a bunch of fields too much, but that does not matter
+                                r = result.rows.item(0);                              
+                                info = {};
+                                $.each(r, function(i, v) {
+                                    info[i] = v;
+                                });
+                                // Overwrite the date
+                                info.date = new Date().toISOString().substr(0,10);
+
+                                // Pickup the project-details
+                                if (typeof lookups.project.rows[info.fk_project] != 'undefined') {
+                                    p = lookups.project.rows[info.fk_project];
+                                    info.project_number = p.number;
+                                    info.project_description = p.description;
+                                    info.project_location = p.location;
+                                }
+
+                                // Load all repeating items into lines
+                                info.lines = {};                            
+                                for (var index = 0; index < result.rows.length; index++) {
+                                    r = result.rows.item(index);
+                                    if (r.icon_type != null && r.lat != null && r.lng != null) {                                        
+                                        info.lines[index] = {
+                                            'icon_type': r.icon_type,
+                                            'lat': r.lat,
+                                            'lng': r.lng,
+                                            'content': r.content
+                                        };                                                                                
+                                    }                                                                        
+                                }                                
+                            } catch(e) {
+                                app.showAlert('error: ' + e.message);
+                            }
+                        }
+                    );
+                },
+                function(error) {
+                    app.showAlert('Det oppsto en feil: ' + error.message);
+                    logHelper.error('blastplan/index.html', 'loadInfo', error.message);
+                },
+                function(success) {
+                    showInfo();
+                }
+            );
+        }        
+    }
+        
+    function saveInfo(){        
+        if (typeof info.id == 'undefined') {
+            info.id = uuidHelper.generateGuid();
+        }
+        
+        info.fk_user = app.user.id;                       
+        info.date = $('#date').val();
+        info.comment = $('#comment').val();
+                
+        // Check if the project exists
+        if ($('#fk_project').is(':visible')) {
+            pnr = $('#fk_project').val();
+            if (pnr == '0') pnr = '';
+        } else {
+            pnr = $('#project_number').val().trim();
+        }
+        
+        // Because of the asynchronous nature of the queries, we HAVE to use a call-back function after inserting a new project
+        // However, we don't always have to insert a new project - in which case a call-back function would not be necessary
+        // But by using a call-back anyway, the code can flow in the same way
+        // So when we don't have to insert a new project, we'll just do a random select and surf on that call-back
+        sql = 'SELECT * FROM project WHERE number = ?';
+        sql_values = [pnr];
+
+        if (pnr != '') {
+            if (typeof lookups.project.rows[pnr] == 'undefined') {
+                sql = 'INSERT INTO project (number, description, location, fk_user) VALUES (?, ?, ?, ?)';
+                sql_values = [pnr, $('#project_description').val(), $('#project_location').val(), info.fk_user];
+            }
+        }
+
+        database.db.transaction(
+            function(tx) {
+                // Run the sql to either create or select the project
+                tx.executeSql(
+                    sql,
+                    sql_values,
+                    function(tx, success) {
+                        // The following does not throw an exception but will just break the code: if( typeof success.insertId == 'undefined' ) duh!
+                        if (sql.substr(0,6) == 'INSERT') {
+                            // Add the newly inserted project
+                            lookups.project.rows[pnr] = {
+                                'number': pnr,
+                                'description': $('#project_description').val(),
+                                'location': $('#project_location').val()
+                            };
+                        }
+                        info.fk_project = pnr;
+                        info.project = lookups.project.rows[pnr];
+
+                        // Now save the information and related records
+                        database.db.transaction(
+                            function(tx2) {
+                                // Prepare the sql values
+                                sql_fields = 'id, fk_user, fk_project, date, comment';
+                                sql_questionmarks = '?, ?, ?, ?, ?';
+                                sql_values = [
+                                    info.id,
+                                    info.fk_user,
+                                    info.fk_project,             
+                                    info.date,
+                                    info.comment
+                                ];
+
+                                // Remove any old records - all part of one transaction
+                                if (typeof info.id != 'undefined') {
+                                    tx2.executeSql('DELETE FROM blastplan WHERE id = ?', [info.id]);
+                                    tx2.executeSql('DELETE FROM blastplan_lines WHERE fk_blastplan = ?', [info.id]);
+                                }
+
+                                // Insert new record
+                                tx2.executeSql(
+                                    'INSERT INTO blastplan (' + sql_fields + ') VALUES (' + sql_questionmarks + ')',
+                                    sql_values,
+                                    function(tx2, success2) {
+                                        markers.forEach(function(marker) {
+                                            tx2.executeSql(
+                                                'INSERT INTO blastplan_lines (fk_blastplan, icon_type, lat, lng, content) VALUES (?, ?, ?, ?, ?)',
+                                                [info.id, marker.iconType, marker.position.lat(), marker.position.lng(), JSON.stringify(marker.properties)]
+                                            );
+                                        });                                                                               
+
+                                        synchronizeInfo(
+                                            'blastplan',
+                                            function() {
+                                                app.showAlert('Informasjonen er lagret og sendt til serveren.');
+                                            },
+                                            function() {
+                                                app.showAlert('Informasjonen er lagret men ikke lastet opp til serveren. Vennligst synkroniser senere.');
+                                            }
+                                        );
+                                    },
+                                    function(error) {
+                                        app.showAlert('Det oppsto en feil (1): ' + error.message);
+                                        logHelper.error('blastplan/edit.html', 'saveInfo', error.message);
+                                    }
+                                );
+                            },
+                            function(error) {
+                                app.showAlert('Det oppsto en feil (2): ' + error.message);
+                                logHelper.error('blastplan/edit.html', 'saveInfo', error.message);
+                            },
+                            function(success) {
+                                markers.length = 0;
+                                currentMarker = null;                                
+                                app.id = info.id;
+                                app.loadFile('blastplan/index.html');
+                            }
+                        );
+                    },
+                    function(error) {
+                        app.showAlert('Det oppsto en feil (3): ' + error.message);
+                        logHelper.error('blastplan/edit.html', 'saveInfo', error.message);
+                    }
+                );
+            },
+            function(error) {
+                app.showAlert('Det oppsto en feil (4): ' + error.message);
+                logHelper.error('blastplan/edit.html', 'saveInfo', error.message);
+            }
+        );                                   
+    }
+</script>

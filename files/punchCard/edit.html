@@ -1,0 +1,231 @@
+<div data-role="header">
+	<h1>Punch Card</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Tilbake</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Meny</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true">
+			<li data-role="list-divider">Meny</li>
+			<li><a id="menuSave">Lagre</a></li>			
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+	<form>               
+        <label for="user_name">User Name</label>
+        <input type="text" name="user_name" id="user_name" readonly>
+        
+        <label for="date_time">Time</label>
+        <input type="text" name="date_time" id="date_time" readonly>
+            
+		<label for="lat_long">Latitude / Longitude</label>
+        <input type="text" name="lat_long" id="lat_long" readonly>
+        	             
+		<label for="comment">Comment</label>
+		<textarea name="comment" id="comment"></textarea> 
+
+        <fieldset data-role="controlgroup" data-type="horizontal" style="text-align: right;">                      
+            <input type="radio" name="code" id="code-in" value="1">
+            <label for="code-in">Check In</label>
+            <input type="radio" name="code" id="code-out" value="0">
+            <label for="code-out">Check Out</label>            
+        </fieldset>
+	</form>
+</div>
+
+<script>
+// info will hold the document information - default values go here
+var info = {
+	'date_time': dateHelper.convertDateTime(new Date()).substr(0, 16),
+    'user_name': app.user.name
+};   
+
+function loadCurrentPosition() {
+    var deferred = $.Deferred();
+    
+    geolocationHelper.getCurrentPosition(
+        function(position) {
+            info.lat_long = position.coords.latitude + ', ' + position.coords.longitude;
+            deferred.resolve();
+        },
+        function(error) {
+            deferred.reject();
+        });
+        
+    return deferred.promise();
+}
+
+function showInfo() {     
+    loaderHelper.showLoader('Loading.', true, false);  
+    loadCurrentPosition()
+        .always(
+            function() {          
+                loaderHelper.hideLoader();
+                $.each(info, function(i, v) {		
+                    var el = $(':input[name="' + i + '"]');
+                    if (el.length > 0) {            
+                        if (el.prop('type').toLowerCase() == 'radio') {
+                            el.filter('[value = "' + v + '"]').prop('checked', true);
+                            el.checkboxradio('refresh');
+                        } else {
+                            el.val(v);
+                        }
+                    }		
+                });     
+            });        	   
+}
+
+function loadInfo(id) {
+	// Load the record, call showInfo() when done
+	if (typeof id == 'undefined') {
+		id = '';
+	}
+	if (id == '') {
+		showInfo();
+	} else {				
+		database.db.transaction(
+			function(tx) {
+				tx.executeSql(
+					'SELECT pc.*, u.username as user_name FROM punch_card pc LEFT JOIN user u ON pc.fk_user = u.id WHERE pc.id = ?',
+					[id],
+					function(tx, result) {
+						// Copy all fields to info - because of the left join, we'll have a bunch of fields too much, but that does not matter
+						r = result.rows.item(0);
+						info = {};
+						$.each(r, function(i, v) {
+							info[i] = v;
+						});
+						// Overwrite the date
+						info.date_time = dateHelper.convertDateTime(new Date()).substr(0, 16);											
+					}
+				);
+			},
+			function(error) {
+				app.showAlert('Det oppsto en feil: ' + error.message);
+				logHelper.error('punchCard/edit.html', 'loadInfo', error.message);
+			},
+			function(success) {
+				showInfo();
+			}
+		);
+	}
+}
+
+function synchronizeInfo(cb_success, cb_error) {
+	$.ajax({
+		url: 'http://' + app.serverAddress + '/info_put_record.php',
+		data: {
+			username: app.user.name,
+			password: app.user.password,
+			table: 'punch_card',
+			json: JSON.stringify(info).replace(/\'null\'/g, 'null')	// convert 'null' to null
+		},
+		success: function(data, status, xhr) {
+			cb_success();
+		},
+		timeout: function() {
+			cb_error();
+		}
+	});
+}
+
+function saveInfo(){	
+	if (typeof info.id == 'undefined') {
+		info.id = uuidHelper.generateGuid();
+	}
+	info.fk_user = app.user.id;
+	info.date_time = $('#date_time').val();
+    info.lat_long = $('#lat_long').val();
+	info.comment = $('#comment').val();	
+    info.code = $(':radio[name = "code"]:checked').val();
+
+    // Now save the information and related records
+    database.db.transaction(
+        function(tx) {
+            // Prepare the sql values
+            var sql_fields = 'id, fk_user, date_time, lat_long, comment, code';
+            var sql_questionmarks = '?, ?, ?, ?, ?, ?';
+            var sql_values = [
+                info.id,
+                info.fk_user,
+                info.date_time,
+                info.lat_long,
+                info.comment,
+                info.code
+            ];
+
+            // Remove any old records - all part of one transaction
+            if (typeof info.id != 'undefined') {
+                tx.executeSql('DELETE FROM punch_card WHERE id = ?', [info.id]);                
+            }
+
+            // Insert new record
+            tx.executeSql(
+                'INSERT INTO punch_card (' + sql_fields + ') VALUES (' + sql_questionmarks +')',
+                sql_values,
+                function(tx, result) {                                      
+                    synchronizeInfo(										
+                        function() {
+                            app.showAlert('Informasjonen er lagret og sendt til serveren.');
+                        },
+                        function() {
+                            app.showAlert('Informasjonen er lagret men ikke lastet opp til serveren. Vennligst synkroniser senere.');
+                        }
+                    );
+                },
+                function(error) {
+                    app.showAlert('Det oppsto en feil (1): ' + error.message);
+                    logHelper.error('punchCard/edit.html', 'saveInfo', error.message);
+                }
+            );
+        },
+        function(error){
+            app.showAlert('Det oppsto en feil (2): ' + error.message);
+            logHelper.error('punchCard/edit.html', 'saveInfo', error.message);
+        },
+        function(success) {
+            app.id = info.id;
+            app.loadFile('punchCard/index.html');            
+        }
+    );							
+}
+
+var loaded = false;
+$(document).ready(function() {
+	if (!loaded) {
+		try {			                    
+			if (typeof app.id != 'undefined') {
+                // Loading an existing punch card
+                loadInfo(app.id);
+            } else {
+                // Create it on demand, unrelated to anything else
+                showInfo();					
+            }		
+
+			// Register actions
+			$('#buttonMain').on('click', function() {
+				if(typeof app.id == 'undefined') {
+                    app.loadFile('main/index.html');					
+				} else {
+					// We were editing a document and were viewing it earlier
+					app.loadFile('punchCard/index.html');
+				}
+			});
+            
+			$('#buttonMenu').on('click',function() {				
+				$('#menu').popup({'history':false});
+				$('#menu').popup('open');
+			});		
+						
+			$('#menuSave').on('click',function() {
+				saveInfo();
+			});						
+			
+			// Prevent this from happening twice
+			loaded = true;
+		} catch(error) {
+			app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' + error.message);
+		}
+	}
+});
+</script>

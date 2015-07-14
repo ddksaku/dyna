@@ -1,0 +1,302 @@
+<div data-role="header">
+	<h1>Blast Plan</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Tilbake</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Meny</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true" style="min-width:210px;">
+			<li data-role="list-divider">Meny</li>			
+			<li><a id="menuEdit">Rediger</a></li>
+			<li><a id="menuArchive">Arkiver</a></li>
+			<li><a id="menuDelete">Fjern</a></li>
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+     <div class="col-xs-8">
+        <div id="map-canvas">
+            <!-- map loads here... -->                
+        </div>        	
+    </div>
+
+    <div class="col-xs-4">
+        <div class="panel panel-default">
+            <div class="panel-heading">Details</div>
+
+            <div class="panel-body">
+                <label for="project">Project</label>
+                <input type="text" name="project" id="project">     
+
+                <label for="date">Date</label>
+                <input type="text" name="date" id="date">
+
+                <label for="comment">Comment</label>
+                <textarea name="comment" id="comment"></textarea>                                    
+            </div>
+        </div>                
+
+        <div class="panel panel-default" id="blast-properties">
+            <div class="panel-heading">Properties</div>
+            <div class="panel-body">
+                <div id="empty-blast-property" style="display: none;">No requirements for this type.</div>
+                <div>
+                    <div class="blast-property" style="display: none;">
+                        <label for="name">Name</label>
+                        <input type="text" id="name">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="sensor-id">Sensor ID</label>
+                        <input type="number" id="sensor-id">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="person">Person responsible</label>
+                        <input type="text" id="person">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="document-id">Document ID</label>
+                        <input type="number" id="document-id">
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="comment">Comment</label>
+                        <textarea name="comment" id="comment" rows="6"></textarea>
+                    </div>
+
+                    <div class="blast-property" style="display: none;">
+                        <label for="phones">Mobile phone numbers</label>
+                        <textarea name="phones" id="phones" rows="6"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>      
+    </div>
+</div>
+
+<script>    
+    var map,
+        markers = [];        
+
+    var $blastProperties = $('#blast-properties');
+    
+    var blastProperties = {
+        evacuation: [ 'document-id', 'comment' ],
+        explosion: [ 'comment' ],
+        information: [ 'name', 'phones', 'comment' ],
+        sensor: [ 'comment', 'sensor-id', 'person' ],
+        traffic: [ 'name', 'phones', 'comment' ],
+        other: [ 'comment' ]
+    };
+    
+    // info will hold the document information
+    var info = {};   
+ 
+    var loaded = false;
+    $(document).ready(function() {
+        if (!loaded) {  
+            try {
+                initMap();                                                         
+                                
+                // Load and display the document
+                loadInfo(app.id);
+                
+                // Register actions
+                $('#buttonMain').on('click', function() {                    
+                    app.loadFile('main/index.html');					                    
+                });
+
+                $('#buttonMenu').on('click', function() {				
+                    $('#menu').popup({ history: false });
+                    $('#menu').popup('open');
+                });		
+
+                $('#menuEdit').on('click',function() {
+                    app.loadFile('blastplan/edit.html');
+                });
+                
+                $('#menuArchive').on('click',function() {
+                    if (confirm('Er du sikker du vil arkivere informasjonen?')) {
+                        archiveInfo();
+                    }
+                });
+                
+                $('#menuDelete').on('click',function() {
+                    if (confirm('Er du sikker du vil fjerne informasjonen?')) {
+                        deleteInfo();
+                    }
+                });                                
+
+                // Prevent this from happening twice
+                loaded = true;            
+            } catch(error) {
+                app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' + error.message);
+            }
+        }
+    });        
+    
+    function initMap() {        
+        var mapOptions = { 
+            zoom: 4,
+            center: new google.maps.LatLng(-25.363882, 131.044922) // Austria
+        };
+        map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);       
+
+        var mapHeight = $(window).height();
+        $('#map-canvas').css('height', mapHeight);
+    }   
+
+    function initBlastProperties() {
+        $blastProperties.find('input, textarea').val('');
+    }
+
+    function toggleBlastProperties(fields, values) {
+        $blastProperties.find('.blast-property').hide();
+
+        fields.forEach(function(id) {
+            var $field = $blastProperties.find('[id=' + id + ']');
+            $field.first().closest('.blast-property').show();
+
+            if (typeof values != 'undefined' && typeof values[id] != 'undefined') {
+                $field.val(values[id]);
+            }
+        });
+    }
+       
+    function retriveMarker(line, map) {  
+        try {                               
+            var iconPath = /*fileHelper.rootDirectoryPath + app.localRootDirectory + */'files/blastplan/icons/marker-' + line.icon_type + '.png';
+            var position = new google.maps.LatLng(line.lat, line.lng);
+
+            var marker = new google.maps.Marker({
+                position: position,
+                icon: iconPath,                
+                map: map
+            });
+            
+            marker.properties = JSON.parse(line.content);                                               
+            marker.iconType = line.icon_type;
+
+            google.maps.event.addListener(marker, 'click', function(e) {                
+                toggleBlastProperties(blastProperties[line.icon_type], marker.properties);               
+            });
+
+            markers.push(marker);
+        } catch (error) {
+            app.showAlert('error: ' + error.message);
+        }
+    }      
+            
+    function showInfo() {
+        $.each(info, function(i, v) {
+            if (i == 'lines') {                                
+                $.each(info.lines, function(i2, v2){
+                    retriveMarker(v2, map);
+                });               
+            } else {
+                var el = $(':input[name="' + i + '"]');
+                if (el.length > 0) {                    
+                    el.val(v);                    
+                }
+            }
+        });   
+        
+        // We're viewing
+        $(':input').prop('disabled', true);
+    }
+
+    function loadInfo(id) {
+        // Load the record, call showInfo() when done
+        if (typeof id == 'undefined') {
+            id = '';
+        }
+        
+        if (id == '') {
+            showInfo();
+        } else {
+            // Load the record, call showInfo() when done
+            database.db.transaction(
+                function(tx) {
+                    var query = 'SELECT b.*, p.number || ": " || p.description as project, bl.*, b.id as id FROM blastplan b ' +
+                        'LEFT JOIN project p ON b.fk_project = p.number ' +  
+                        'LEFT JOIN blastplan_lines bl ON b.id = bl.fk_blastplan ' +
+                        'WHERE b.id = ?';
+
+                    // Note: || is to concatenate strings in sqlite
+                    tx.executeSql(query, 
+                        [id],
+                        function(tx, result) {
+                            try {
+                                // Copy all fields to info - because of the left join, we'll have a bunch of fields too much, but that does not matter
+                                r = result.rows.item(0);                              
+                                info = {};
+                                $.each(r, function(i, v) {
+                                    info[i] = v;
+                                });                                                              
+
+                                // Load all repeating items into lines
+                                info.lines = {};                            
+                                for (var index = 0; index < result.rows.length; index++) {
+                                    r = result.rows.item(index);
+                                    if (r.icon_type != null && r.lat != null && r.lng != null) {                                        
+                                        info.lines[index] = {
+                                            'icon_type': r.icon_type,
+                                            'lat': r.lat,
+                                            'lng': r.lng,
+                                            'content': r.content
+                                        };                                                                                
+                                    }                                                                        
+                                }                                
+                            } catch(e) {
+                                app.showAlert('error: ' + e.message);
+                            }
+                        }
+                    );
+                },
+                function(error) {
+                    app.showAlert('Det oppsto en feil: ' + error.message);
+                    logHelper.error('blastplan/index.html', 'loadInfo', error.message);
+                },
+                function(success) {
+                    showInfo();
+                }
+            );
+        }        
+    }
+    
+    function deleteInfo() {
+        database.db.transaction(
+            function(tx) {
+                tx.executeSql('DELETE FROM blastplan WHERE id = ?', [app.id]);
+                tx.executeSql('DELETE FROM blastplan_lines WHERE fk_blastplan = ?', [app.id]);                                
+            },
+            function(error) {
+                app.showAlert('Det oppsto en feil: ' + error.message);
+                logHelper.error('blastplan/index.html', 'deleteInfo', error.message);
+            },
+            function(success) {
+                app.showAlert('Informasjonen er nå fjernet.');
+                delete app.id;
+                app.loadFile('main/index.html');
+            }
+        );
+    }
+
+    function archiveInfo() {
+        database.db.transaction(
+            function(tx) {
+                tx.executeSql('UPDATE blastplan SET archived = datetime() WHERE id = ?', [app.id]);
+            },
+            function(error) {
+                app.showAlert('Det oppsto en feil: ' + error.message);
+                logHelper.error('blastplan/index.html', 'archiveInfo', error.message);
+            },
+            function(success) {
+                app.showAlert('Informasjonen er nå arkivert.');
+                delete app.id;
+                app.loadFile('main/index.html');
+            }
+        );
+    }
+</script>

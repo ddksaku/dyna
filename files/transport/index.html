@@ -1,0 +1,294 @@
+<div data-role="header">
+            <h1>Transport Document</h1>                                    
+            <a href="#" id="gotoMainButton"
+               class="ui-btn ui-corner-all ui-icon-back ui-btn-icon-notext ui-btn-left"></a>
+            <a href="#" id="openTransportDocumentButton" 
+               class="ui-btn ui-corner-all ui-icon-bars ui-btn-icon-notext ui-btn-right"></a>
+        </div>
+
+        <div data-role="content"> 
+            <div class='row'>
+                <div class='container'>
+                    <form class='form-horizontal' role='form'>
+                        <div class='form-group'>
+                            <label for='transportDate' class='col-md-4 col-sm-4 col-xs-12'>Date: </label>
+                            <div class='date col-md-8 col-sm-8 col-xs-12'>
+                                <input type='datetime' class='form-control datepicker' data-date-format='mm/dd/yyyy' id='transportDate' placeholder="mm/dd/yyyy" readonly="true" />
+                            </div>    
+                        </div>
+
+                        <div class='form-group'>
+                            <label for='transportReference' class='col-md-4 col-sm-4 col-xs-12'>Reference: </label>
+                            <div class='date col-md-8 col-sm-8 col-xs-12'>
+                                <input type='text' class='form-control' id='transportReference' />
+                            </div>
+                        </div>
+
+                        <div class='form-group'>
+                            <label for='deliveryFrom' class='col-md-4 col-sm-4 col-xs-12'>Location From: </label>
+                            <div class='date col-md-8 col-sm-8 col-xs-12'>
+                                <select id="deliveryFrom" class='form-control'></select>
+                            </div>    
+                        </div>
+
+                        <div class='form-group'>
+                            <label for='deliveryTo' class='col-md-4 col-sm-4 col-xs-12'>Location To: </label>
+                            <div class='date col-md-8 col-sm-8 col-xs-12'>
+                                <select id="deliveryTo" class='form-control'></select>
+                            </div>    
+                        </div>    
+                    </form>
+                </div>  
+            </div>
+    
+            <div class='row'>
+                <div class='container'>
+                    <div class='table-responsive'>
+                        <table class='table table-striped table-hover table-condensed table-bordered'>
+                            <thead>
+                                <tr>
+                                    <th>Product Group</th>                                    
+                                    <th>Product Code</th>
+                                    <th>Unit</th>
+                                    <th>Amount</th>
+                                    <th>Amount Unit</th>
+                                    <th>Weight</th>
+                                    <th>&nbsp;</th>
+                                </tr>    
+                            </thead>
+                            <tbody id='transportLinesBody'></tbody>
+                            <tfoot>
+                                <tr>
+                                    <td class='fieldStockLineId'><input type='hidden' name='fkStockID' id='fkStockID' value='-1' /></td>
+                                    <td class='fieldTransportProductGroup'>
+                                        <select id="productGroups"></select>
+                                    </td>
+                                    <td class='fieldTransportProductCode'>
+                                        <select id="productCodes"></select>
+                                    </td>
+                                    <td class='fieldTransportProductUnit'>
+                                        <p id="productUnit">kg</p>
+                                    </td>
+                                    <td class='fieldTransportProductAmount'>
+                                        <input type="number" data-clear-btn="true" name="productAmount" id="productAmount" value="" class="ui-input-inline" />
+                                    </td>
+                                    <td class='fieldTransportProductAmountUnit'>
+                                        <input type="text" name="productAmountUnit" id="productAmountUnit" value="" class="form-control" />
+                                    </td>
+                                    <td class='fieldTransportProductWeight'>
+                                        <input type="text" name="productWeight" id="productWeight" value="" class="form-control" />
+                                    </td>
+                                    <td class='fieldAction textAlignCenter'>
+                                        <a id='addAction'><img src='img/icons/icon_button_add.png' style='width: 40px; height: 35px;' /></a>
+                                    </td>
+                                    
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>  
+            
+                </div>
+            </div>
+            <div class='row'>
+                <div class='col-md-12 col-sm-12 col-xs-12'>
+                    <button class='btn btn-default' id='buttonSaveTransport'>
+                        <span class='glyphicon glyphicon-floppy-disk'></span>
+                        Save
+                    </button>
+                </div>    
+            </div>    
+        </div>
+    
+        <script>
+            var transportDateElement = "#transportDate";
+            var transportReferenceElement = "#transportReference";
+            var deliveryFromElement = "#deliveryFrom";
+            var deliveryToElement = "#deliveryTo";
+            
+            var productGroupsElement = "#productGroups";                
+            var productCodesElement = "#productCodes";
+            var productUnitElement = "#productUnit";
+            var productAmountElement = "#productAmount";
+            var productAmountUnitElement = "#productAmountUnit";
+            var productWeightElement = "#productWeight";
+            var addActionElement = "#addAction";                
+            var transportLinesBodyElement = "#transportLinesBody";
+            var buttonSaveTransportElement = "#buttonSaveTransport";
+            
+            var transportLinesBodyElement = "#transportLinesBody";
+                                
+            $(document).ready(function() {
+                $('.datepicker').datepicker({ orientation: "top left", autoclose: true });
+                
+                $(productGroupsElement).on("change", loadProductCodes);
+                $(productCodesElement).on("change", loadProductUnit);
+                $(addActionElement).on("click", addAction);
+                $(buttonSaveTransportElement).on("click", saveTransport);
+                    
+                transportRepository.deleteAllUnregisteredTransportLine();    
+                loadLocations(deliveryFromElement);
+                loadLocations(deliveryToElement);
+                loadProductGroups();
+            });
+            
+            function loadLocations(selectElement) {
+                locationRepository.getAll()
+                    .done(
+                        function(locations) {
+                            $.each(locations, function(index, location) {
+                                $("<option>").val(location.id).text(location.location).appendTo($(selectElement));
+                            });
+                            //$(locationsElement).change();
+                        });
+            }            
+
+            function loadProductGroups() {
+                productRepository.getAllGroups()
+                    .done(                            
+                        function(productGroups) {                                
+                            $.each(productGroups, function(index, productGroup) {
+                                $("<option>").text(productGroup).appendTo($(productGroupsElement));
+                            });                                
+                            $(productGroupsElement).change();
+                        });
+            }
+
+            function loadProductCodes() {                    
+                var selectedProductGroup = $(productGroupsElement).val();
+                productRepository.getCodes(selectedProductGroup)
+                    .done(                            
+                        function(productCodes) {                                
+                            $(productCodesElement).empty();
+                            $.each(productCodes, function(index, productCode) {
+                                $("<option>").text(productCode.sku).val(productCode.id).appendTo($(productCodesElement));
+                            });
+                            $(productCodesElement).change();
+                        });
+            }
+
+            function loadProductUnit() {
+                //var selectedProductGroup = $(productGroupsElement).val();
+                var selectedProductID = $(productCodesElement).val();
+                productRepository.getUnit(selectedProductID)
+                    .done(                            
+                        function(productUnit) {     
+                            $(productUnitElement).html(productUnit);                                
+                        });
+            }    
+
+            function addAction() {
+                var valueOfProductCode = $(productCodesElement).val();
+                var valueOfAmount = $(productAmountElement).val();
+                var valueOfAmountUnit = $(productAmountUnitElement).val();
+                var valueOfWeight = $(productWeightElement).val();
+                if(valueOfAmount < 1) return;
+
+                productRepository.getProductByCode(valueOfProductCode)
+                        .done(function(productData) {
+                            if(productData.status) {
+                                var registerData = {
+                                    fk_transport: -1,
+                                    un_code: productData.product.un_code,
+                                    sku: productData.product.sku,
+                                    description: productData.product.description,
+                                    classification: productData.product.classification,
+                                    unit: productData.product.unit,
+                                    packaging: productData.product.packaging,
+                                    amount_unit: valueOfAmountUnit,
+                                    amount: valueOfAmount,
+                                    weight: valueOfWeight
+                                };
+                                
+                                transportRepository.RegisterRecord(app.tableNames.transportLine, registerData)
+                                        .done(function(data) {
+                                            var transportLineId = data.insertId;
+                                            
+                                            if(transportLineId !== -1) {
+                                                var trTransportLine = $('<tr class="col-md-12">');
+                                                $("<td>").addClass('fieldStockLineId').text(transportLineId).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldTransportProductGroup').text($(productGroupsElement + " option:selected").text()).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldTransportProductCode').text($(productCodesElement + " option:selected").text()).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldTransportProductUnit').text($(productUnitElement).text()).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldTransportProductAmount').text($(productAmountElement).val()).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldTransportProductAmountUnit').text($(productAmountUnitElement).val()).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldTransportProductWeight').text($(productWeightElement).val()).appendTo(trTransportLine);
+                                                $("<td>").addClass('fieldAction textAlignCenter').html("<a href='javascript:removeTransportLineAction(" + transportLineId + ");'><img src='img/icons/icon_button_remove.png' style='width: 40px; height: 35px;' /></a>").appendTo(trTransportLine);
+                                                trTransportLine.appendTo($(transportLinesBodyElement));  
+                                                
+                                                loadProductGroups();
+                                                $(productGroupsElement + " option:first").attr("selected", "selected");
+                                                $(productCodesElement + " option:first").attr("selected", "selected");
+                                                $(productAmountElement).val("");
+                                                $(productAmountUnitElement).val("");
+                                                $(productWeightElement).val("");
+                                            }
+                                        });
+                            }
+                        });
+            }  
+            
+            function removeTransportLineAction(id) {
+                transportRepository.DeleteRecord(app.tableNames.transportLine, id) 
+                    .done(
+                        function(data) {
+                            
+                            if(data.rowsAffected === 1){
+                                var selectorTr = $(transportLinesBodyElement).children();
+                                $.each(selectorTr, function(index, value) {
+                                    if($(value).children(".fieldStockLineId").text() == id) {
+                                        $(value).remove();
+                                        return;
+                                    }                                        
+                                });
+                            }
+                        });                   
+            }            
+
+            function saveTransport() {
+                var userName = app.userName;
+                var valueOfDeliveryFrom = $(deliveryFromElement + " option:selected").text();
+                var valueOfDeliveryTo = $(deliveryToElement + " option:selected").text();
+                var valuOfTransportReference = $(transportReferenceElement).val();
+                var valueOfTransportDate = $(transportDateElement).val();
+                var userId;
+
+                if(valueOfTransportDate === '') {
+                    app.showAlert('You must select the Date');
+                    return;
+                }
+
+                userRepository.getUserInfoByName(userName)
+                    .done(
+                        function(data) {
+                            if(data.status === true) {
+                                userId = data.value.id;
+                                var registerData = {
+                                    fk_user: userId,
+                                    location_from: valueOfDeliveryFrom,
+                                    location_to: valueOfDeliveryTo,
+                                    reference: valuOfTransportReference,
+                                    date: valueOfTransportDate,
+                                    number: "1234",
+                                    fk_transport: "1",
+                                    fk_stock: "1",
+                                    fk_project: "1"
+                                    
+                                };
+
+                                transportRepository.RegisterRecord(app.tableNames.transport, registerData)
+                                    .done(function(result) {
+//console.log(result);                                        
+                                        if(result.insertId !== -1) {
+                                            transportRepository.RegisterTempTransportLineRecord(result.insertId)
+                                            .done(
+                                                function(stockLineResult) {
+                                                    app.showAlert('Success register.');
+                                                    app.gotoMainPage();                                                        
+                                                });
+                                        }
+
+                                    });
+                            } 
+                    });
+            }    
+        </script>

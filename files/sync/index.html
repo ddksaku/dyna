@@ -1,0 +1,54 @@
+<div data-role="header">                   
+    <h1>Oppsett</h1>                                                             
+</div>
+
+<div data-role="content">                    
+    <button id="downloadSettingsButton" class="ui-btn ui-btn-corner-all ui-icon-arrow-d ui-btn-icon-right">
+        Last ned innstillinger   
+        <br/>
+        <span id="downloadSettingsStatusMessage" class="statusMessage"></span>
+    </button>
+
+    <button id="downloadFilesButton" class="ui-btn ui-btn-corner-all ui-icon-arrow-d ui-btn-icon-right">
+        Last ned skjemaene                                       
+        <br/>
+        <span id="downloadFilesStatusMessage" class="statusMessage"></span>
+    </button>                                 
+
+    <button id="continueButton" class="ui-btn ui-btn-inline floatRight">
+        Avslutt installasjon
+    </button> 
+</div>
+
+<script type="text/javascript">
+var loaded = false;
+$(document).ready(function(){
+	if( !loaded ) {
+        $('#continueButton').hide();
+
+        $('#downloadSettingsButton').on('click', synchronize.downloadTables);                    
+        $('#downloadFilesButton').on('click', synchronize.downloadForms);                            
+        $('#continueButton').on('click', 
+            function() {
+                navigator.app.exitApp();
+            });                      
+
+        database.hasTable(app.tableNames.settings)
+            .then(
+                function(result) {
+                    if (result === true) { // settings table exists                                    
+                    } else {
+                        $('#downloadFilesButton').addClass('ui-disabled');
+                    }
+                },
+                function() {
+                    $('#downloadFilesButton').addClass('ui-disabled');
+                }); 
+
+        var lastDownloadedTableInfo = localStorage.getItem(app.localStorageKeys.sync.lastDownloadedTableInfo);
+        if (lastDownloadedTableInfo !== null && lastDownloadedTableInfo !== undefined) {
+            $('#downloadSettingsStatusMessage').text(lastDownloadedTableInfo);                    
+        }
+    }
+});
+</script>    

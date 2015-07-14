@@ -1,0 +1,703 @@
+<style type="text/css">
+td.group {
+	max-width: 65px;
+}
+td.product {
+	max-width: 170px;
+}
+td.unit {
+	text-align: center;
+}
+td.amount {
+	width: 60px;
+}
+#unit {
+	height: 50px;
+	line-height: 50px;
+	font-weight: bold;
+}
+</style>
+
+<div data-role="header">
+	<h1>Sjekk ut/inn</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Tilbake</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Meny</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true">
+			<li data-role="list-divider">Meny</li>
+			<li><a id="menuSave">Lagre</a></li>
+			<li><a id="menuTransport">Lagre og lag transportdok</a></li>
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+	<form>
+		<fieldset data-role="controlgroup" data-type="horizontal" data-mini="true">
+			<label for="check_inout_out">Ut</label>
+			<input type="radio" name="check_inout" id="check_inout_out" value="out" checked="checked">
+			<label for="check_inout_in">Inn</label>
+			<input type="radio" name="check_inout" id="check_inout_in" value="in">
+			<label for="check_inout_other">Annet</label>
+			<input type="radio" name="check_inout" id="check_inout_other" value="other">
+		</fieldset>
+
+		<label for="project">Prosjekt</label>
+		<table width="100%"><tr><td style="width:100%">
+			<div class="project">
+				<select name="fk_project" id="fk_project" data-mini="true"></select>
+			</div>
+			<div data-role="controlgroup" class="project_text">
+				<div class="ui-body ui-body-a ui-corner-all">
+					<table width="100%">
+					<tr><td>Nummer</td><td><input type="text" name="project_number" id="project_number" data-clear-btn="true"></td></tr>
+					<tr><td>Navn</td><td><input type="text" name="project_description" id="project_description" data-clear-btn="true"></td></tr>
+					<tr><td>Arbeidssted</td><td><input type="text" name="project_location" id="project_location" data-clear-btn="true"></td></tr>
+					</table>
+				</div>
+			</div>
+		</td><td>
+			<a id="switchProject" href="#" class="switcher ui-btn ui-shadow ui-corner-all ui-icon-edit ui-btn-icon-notext">Switch</a>
+		</td></tr></table>
+
+		<label for="location">Lagersted</label>
+		<table width="100%"><tr><td style="width:100%">
+			<div class="location">
+				<select name="location" id="location" data-mini="true"></select>
+			</div>
+			<div class="location_text">
+				<input type="text" name="location_text" id="location_text">
+			</div>
+		</td><td>
+			<a id="switchLocation" href="#" class="switcher ui-btn ui-shadow ui-corner-all ui-icon-edit ui-btn-icon-notext">Switch</a>
+		</td></tr></table>
+
+		<label for="date">Dato</label>
+		<input type="datetime" class="datepicker" data-date-format="yyyy-mm-dd" name="date" id="date" readonly="true" />
+
+		<label for="comment">Kommentar</label>
+		<textarea name="comment" id="comment"></textarea>
+
+		<div class="table-responsive">
+			<table id="goods" class="table table-striped table-hover table-condensed table-bordered" style="overflow: scroll">
+				<thead>
+					<tr>
+						<th colspan="2">Vare</th>
+						<th>Enhet</th>
+						<th>Antall</th>
+						<th>&nbsp;</th>
+					</tr>
+				</thead>
+				<tbody id="lines"></tbody>
+				<tfoot>
+					<tr>
+						<td class="group">
+							<select id="group"></select>
+						</td>
+						<td class="product">
+							<select id="product"></select>
+						</td>
+						<td class="unit">
+							<p id="unit">kg</p>
+						</td>
+						<td class="amount">
+							<input type="number" name="amount" id="amount" value="" class="ui-input-inline" />
+						</td>
+						<td class="fieldAction textAlignCenter">
+							<a id="addAction" class="ui-shadow ui-btn ui-corner-all ui-btn-inline ui-icon-plus ui-btn-icon-notext" href="#">OK</a>
+						</td>
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+	</form>
+</div>
+
+<script>
+// info will hold the document information - default values go here
+var info = {
+	'date': new Date().toISOString().substr(0,10),
+	'lines': {}
+};
+// maxid provides unique line numbers, useful when deleting or adding lines in both ui and info
+var maxid = 0;
+
+// Some tables will be loaded on document ready so they are available for reference
+var lookups = {
+	'product': {
+		'sql': 'SELECT * FROM product WHERE archived IS NULL ORDER BY sort,`group`,sku',
+		'key': 'id',
+		'rows': {}
+	},
+	'project': {
+		'sql': 'SELECT number,description,location FROM project WHERE archived IS NULL ORDER BY number,description',
+		'key': 'number',
+		'rows': {}
+	}
+};
+
+// This tells what selects to load from the database, and how to format the values
+var select = [
+	{
+		'id': 'fk_project',
+		'query': 'SELECT number,description,location FROM project WHERE archived IS NULL ORDER BY number,description',
+		'text': function(o){ return o.number +': ' +o.description +' (' +o.location +')' },
+		'val': function(o){ return o.number }
+	},
+	{
+		'id': 'group',
+		'query': 'SELECT DISTINCT `group` FROM product WHERE archived IS NULL',
+		'text': function(o){ return o.group },
+		'val': function(o){ return o.group }
+	},
+	{
+		'id': 'location',
+		'query': 'SELECT * FROM location WHERE archived IS NULL',
+		'text': function(o){ return o.location },
+		'val': function(o){ return o.location }
+	}
+];
+
+function showInfo(){
+	$.each( info, function(i,v){
+		if( i == 'lines' ){
+			// Special treatment for this repeating group
+			var cnt = 0;
+			$.each( info.lines, function(i2,v2){
+				showLine( cnt++, v2 );
+			});
+			// Update the maxid in case the user adds/removes lines
+			maxid = cnt;
+		} else {
+			var el = $(':input[name="' +i +'"]');
+			if( el.length > 0 ) {
+				if( el.prop('tagName').toLowerCase() == 'select' ) {
+					// See if the value exists in the list
+					var exists = false;
+					el.find('option').each( function(){
+						if( this.value == v ){
+							exists = true;
+						}
+					});
+					if( exists ) {
+						// Select that value
+						el.val(v).change();
+					} else {
+						// Add the value to the select
+						if( v != '' ) {
+							el.append( $('<option>').val(v).text(v));	//.prop('selected','selected'));
+							el.val(v).change();
+						}
+					}
+				} else if( el.prop('type').toLowerCase() == 'radio' ) {
+					el.filter('[value="' +v +'"]').prop('checked',true);
+					el.checkboxradio('refresh');
+				} else {
+					el.val(v);
+				}
+			}
+		}
+	});
+
+	// If this is based on a transport document, hide the option to create a transport document
+	if( typeof app.stock_source == 'undefined' ) {
+		$('#menuTransport').show();
+	} else {
+		$('#menuTransport').hide();
+	}
+}
+
+function loadInfo(id,source){
+	// Load the record, call showInfo() when done
+	if( typeof id == 'undefined' ) {
+		id = '';
+	}
+	if( id == '' ) {
+		showInfo();
+	} else {
+		// 'source' is either 'stock' or 'transport'
+		var sql;
+		if( typeof source == 'undefined' ) {
+			source = '';
+		}
+		switch( source ) {
+		case 'transport':
+			// We're creating a new stock check-in document based on a (return) transport document
+			sql = 'SELECT t.*,tl.* FROM transport t LEFT JOIN transport_lines tl ON t.id=tl.fk_transport WHERE t.id=?';
+			break;
+		default:
+			// We're editing or creating a stock document
+			sql = 'SELECT s.*,sl.* FROM stock s LEFT JOIN stock_lines sl ON s.id=sl.fk_stock WHERE s.id=?';
+		}
+		database.db.transaction(
+			function(tx){
+				tx.executeSql(
+					sql,
+					[id],
+					function(tx, result){
+						// Copy all fields to info - because of the left join, we'll have a bunch of fields too much, but that does not matter
+						r = result.rows.item(0);
+						info = {};
+						$.each(r,function(i,v){
+							info[i] = v;
+						});
+						// Overwrite the date
+						info.date = new Date().toISOString().substr(0,10);
+
+						// Pickup the project-details
+						if( typeof lookups.project.rows[info.fk_project] != 'undefined' ) {
+							p = lookups.project.rows[info.fk_project];
+							info.project_number = p.number;
+							info.project_description = p.description;
+							info.project_location = p.location;
+						}
+
+						switch( source ) {
+						case 'transport':
+							info.check_inout = 'in';
+							info.location = info.location_to;
+							info.comment = info.reference;
+							info.fk_transport = app.stock_id;
+							delete info.id;
+							break;
+						default:
+							// Edit or view a transport document - we have what we need so do nothing
+						}
+
+						// Load all repeating items into lines
+						info.lines = {};
+						for( var cnt=0; cnt<result.rows.length; cnt++ ){
+							r = result.rows.item(cnt);
+							if( r.sku != null ) {
+								info.lines['row_'+cnt] = {
+									'fk_product' : r.fk_product,
+									'sku' : r.sku,
+									'unit' : r.unit,
+									'amount' : r.amount
+								};
+								if( typeof r.fk_product == 'undefined' ) {
+									// We need to pickup the product id again based on the sku
+									$.each(lookups.product.rows,function(i,p){
+										if( r.sku == p.sku ) {
+											r.fk_product = p.id;
+										}
+									});
+								}
+							}
+						}
+					}
+				);
+			},
+			function(error) {
+				app.showAlert( 'Det oppsto en feil: ' +error.message );
+				logHelper.error( 'stock/edit.html', 'loadInfo', error.message );
+			},
+			function(success) {
+				showInfo();
+			}
+		);
+	}
+}
+
+function synchronizeInfo(infoType,cb_success,cb_error){
+	$.ajax({
+		url: 'http://' +app.serverAddress +'/info_put_record.php',
+		data: {
+			username: app.user.name,
+			password: app.user.password,
+			table: infoType,
+			json: JSON.stringify(info).replace(/\'null\'/g, 'null')	// convert 'null' to null
+		},
+		success: function(data,status,xhr){
+			cb_success();
+		},
+		timeout: function(){
+			cb_error();
+		}
+	});
+}
+
+function saveInfo(intention){
+	// Save the document and any related records
+	// Parameter 'intention' indicates what we want to do afterwards
+	if( typeof info.id == 'undefined' ) {
+		info.id = app.getGUID();
+	}
+	info.fk_user = app.user.id;
+	info.date = $('#date').val();
+	info.comment = $('#comment').val();
+	info.check_inout = $(':radio[name="check_inout"]:checked').val();
+	if( $('#location').is(':visible')) {
+		info.location = $('#location').find('option:selected').text();
+	} else {
+		info.location = $('#location_text').val();
+	}
+
+	// Add the reference to either the stock or transport that was the source for this transport document
+	if( typeof app.stock_source == 'undefined' ) {
+		info.fk_transport = null;
+	} else {
+		info.fk_transport = app.transport_id;
+	}
+
+	// Check if the project exists
+	if( $('#fk_project').is(':visible')) {
+		pnr = $('#fk_project').val();
+		if( pnr == '0' ) pnr = '';
+	} else {
+		pnr = $('#project_number').val().trim();
+	}
+
+	// Because of the asynchronous nature of the queries, we HAVE to use a call-back function after inserting a new project
+	// However, we don't always have to insert a new project - in which case a call-back function would not be necessary
+	// But by using a call-back anyway, the code can flow in the same way
+	// So when we don't have to insert a new project, we'll just do a random select and surf on that call-back
+	sql = 'SELECT * FROM project WHERE number=?';
+	sql_values = [pnr];
+
+	if( pnr != '' ) {
+		if( typeof lookups.project.rows[pnr] == 'undefined' ) {
+			sql = 'INSERT INTO project (number,description,location,fk_user) VALUES (?,?,?,?)';
+			sql_values = [pnr, $('#project_description').val(), $('#project_location').val(), info.fk_user];
+		}
+	}
+
+	database.db.transaction(
+		function(tx){
+			// Run the sql to either create or select the project
+			tx.executeSql(
+				sql,
+				sql_values,
+				function(tx,success){
+					// The following does not throw an exception but will just break the code: if( typeof success.insertId == 'undefined' ) duh!
+					if( sql.substr(0,6) == 'INSERT' ) {
+						// Add the newly inserted project
+						lookups.project.rows[pnr] = {
+							'number': pnr,
+							'description': $('#project_description').val(),
+							'location': $('#project_location').val()
+						};
+					}
+					info.fk_project = pnr;
+					info.project = lookups.project.rows[pnr];
+
+					// Now save the information and related records
+					database.db.transaction(
+						function(tx2){
+							// Prepare the sql values
+							sql_fields = 'id,fk_user,fk_project,fk_transport,check_inout,location,date,comment';
+							sql_questionmarks = '?,?,?,?,?,?,?,?';
+							sql_values = [
+								info.id,
+								info.fk_user,
+								info.fk_project,
+								info.fk_transport,
+								info.check_inout,
+								info.location,
+								info.date,
+								info.comment
+							];
+
+							// Remove any old records - all part of one transaction
+							if( typeof info.id != 'undefined' ) {
+								tx2.executeSql('DELETE FROM stock WHERE id=?', [info.id]);
+								tx2.executeSql('DELETE FROM stock_lines WHERE fk_stock=?', [info.id]);
+							}
+
+							// Insert new record
+							tx2.executeSql(
+								'INSERT INTO stock (' +sql_fields +') VALUES (' +sql_questionmarks +')',
+								sql_values,
+								function(tx2,success2){
+									$.each( info.lines, function(i,v) {
+										tx2.executeSql(
+											'INSERT INTO stock_lines (fk_stock,fk_product,sku,unit,amount) VALUES (?,?,?,?,?)',
+											[info.id, v.fk_product, v.sku, v.unit, v.amount]
+										);
+									});
+
+									// Archive the original transport document (if any) - (time(\'now\') is wrong: give only hours and minutes)
+									if( typeof app.stock_source != 'undefined' ) {
+										tx2.executeSql(
+											'UPDATE ' +app.stock_source +' SET archived=datetime() WHERE id=?',
+											[app.stock_id]
+										);
+									}
+
+									synchronizeInfo(
+										'stock',
+										function(){
+											app.showAlert('Informasjonen er lagret og sendt til serveren.');
+										},
+										function(){
+											app.showAlert('Informasjonen er lagret men ikke lastet opp til serveren. Vennligst synkroniser senere.');
+										}
+									);
+								},
+								function(error){
+									app.showAlert( 'Det oppsto en feil (1): ' +error.message );
+									logHelper.error( 'stock/edit.html', 'saveInfo', error.message );
+								}
+							);
+						},
+						function(error){
+							app.showAlert( 'Det oppsto en feil (2): ' +error.message );
+							logHelper.error( 'stock/edit.html', 'saveInfo', error.message );
+						},
+						function(success){
+							switch(intention) {
+							case 'transport':
+								// Instruct the transport script to get the info from this stock document
+								// Checking in goods from a return transport document should not go here in practice, but in theory it is possible
+								app.transport_id = info.id;
+								app.transport_source = 'stock';
+								// Delete the id so the transport script knows we want to create a new transport document
+								delete app.id;
+								// Load the transport document interface
+								app.loadFile('transport/edit.html');
+								break;
+							default:
+								app.id = info.id;
+								app.loadFile('stock/index.html');
+							}
+						}
+					);
+				},
+				function(error){
+					app.showAlert('Det oppsto en feil (3): ' +error.message);
+					logHelper.error( 'stock/edit.html', 'saveInfo', error.message );
+				}
+			);
+		},
+		function(error){
+			app.showAlert('Det oppsto en feil (4): ' +error.message);
+			logHelper.error( 'stock/edit.html', 'saveInfo', error.message );
+		}
+	);
+}
+
+function loadProductsByGroup(g){
+	// Load the products when a group is selected
+	el = $('#product');
+	el.empty();
+	$.each(lookups.product.rows,function(i,p){
+		if( p.group == g ) {
+			$('<option>').text(p.sku).val(p.id).data('unit',p.unit).appendTo(el);
+		}
+	});
+	el.change();
+}
+
+function switchSelectText(elName){
+	// The two inputs are within divs (with class names) because jQuery Mobile adds various embedding elements
+	$('div.' +elName).toggle();
+	$('div.' +elName +'_text').toggle();
+}
+
+function addLine(){
+	// Add a line to the info object and ui
+	var amount = parseFloat( $('#amount').val());
+	if( isNaN(amount)) {
+		amount = 0;
+	}
+	var id = $('#product').val();
+	if( id === null || amount <= 0 ) {
+		$('#amount').focus();
+		return false;
+	};
+	var p = lookups.product.rows[id];
+
+	info.lines['row_'+maxid] = {
+		'fk_product' : p.id,
+		'sku' : p.sku,
+		'unit' : p.unit,
+		'amount' : amount
+	};
+
+	// Show it on screen
+	showLine( maxid, info.lines['row_'+maxid] );
+	$('#amount').val('');
+
+	// Increase max id
+	maxid++;
+}
+
+function showLine( id, values ){
+	$('#lines').append(
+		'<tr id="row_' +id +'">' +
+		'<td class="sku" colspan="2">' +values.sku +
+		'<td class="unit">' +values.unit +
+		'<td class="amount">' +values.amount +
+		'<td class="textAlignCenter"><a id="" class="ui-shadow ui-btn ui-corner-all ui-btn-inline ui-icon-delete ui-btn-icon-notext" href="#">Fjern</a>'
+	);
+}
+
+function removeLine(el){
+	// Remove a line from the info object and ui
+	id = el.parent().parent()[0].id;
+	$('#'+id).remove();
+	delete info.lines[id];
+}
+
+function prepLoad(select,done_cb){
+	i = select.shift();
+	database.db.transaction(
+		function(tx){
+			tx.executeSql(
+				i.query,
+				[],
+				function(tx, result){
+					var el = $('#' +i.id);
+					el.empty();
+					$('<option>').text('').val(0).appendTo(el);
+					for( var cnt=0; cnt<result.rows.length; cnt++){
+						r = result.rows.item(cnt);
+						$('<option>').text(i.text(r)).val(i.val(r)).appendTo(el);
+					}
+
+					if( select.length > 0 ) {
+						prepLoad( select, done_cb );
+					} else {
+						done_cb();
+					}
+				}
+			);
+		}
+	);
+}
+
+var loaded = false;
+$(document).ready(function(){
+	if( !loaded ) {
+		try{
+			// Load the lookup-info into arrays - so this info is available e.g. when selecting a product group, adding lines (product) or selecting a project
+			$.each(lookups,function(i,v){
+				database.db.transaction(
+					function(tx){
+						tx.executeSql(
+							lookups[i].sql,
+							[],
+							function(tx, result){
+								for(cnt=0; cnt<result.rows.length; cnt++){
+									keyvalue = result.rows.item(cnt)[lookups[i].key];
+									lookups[i].rows[keyvalue] = result.rows.item(cnt);
+								}
+							}
+						);
+					},
+					function(error){
+						app.showAlert( 'Det oppsto en feil: ' +error.message );
+						logHelper.error( 'stock/edit.html', 'ready', error.message );
+					}
+				);
+			});
+
+			// Load select-values, when done continue
+			prepLoad(select,function(){
+				// Load and display the document
+				if( typeof app.id != 'undefined' ) {
+					// Loading an existing document
+					loadInfo( app.id, '' );
+				} else {
+					// Creating a document
+					if( typeof app.stock_id == 'undefined' ) {
+						// Create it on demand, unrelated to anything else
+						showInfo();
+					} else {
+						// Create it based on a transport document
+						loadInfo( app.stock_id, app.stock_source );
+					}
+				}
+			});
+
+			// Install date picker
+			$('.datepicker').datepicker({ orientation: "top left", autoclose: true });
+
+			// When clicking in one of the inputs, select all text - includes all in tbody and tfoot
+			$('#goods').on('mouseup','input',function(){
+				if( $(this).val() != '' ) {
+					$(this).select();
+				}
+			});
+
+			// Register actions
+			$('#buttonMain').on('click',function(){
+				if( typeof app.id == 'undefined' ) {
+					if( typeof app.stock_source == 'undefined' ) {
+						// We were creating a new document from scratch, so back to main
+						app.loadFile('main/index.html');
+					} else if( app.stock_source == 'transport' ) {
+						// We were creating a new document based on a transport document
+						app.id = app.stock_id;
+						delete app.stock_id;
+						delete app.stock_source;
+						app.loadFile('stock/index.html');
+					}
+				} else {
+					// We were editing a document and were viewing it earlier
+					app.loadFile('stock/index.html');
+				}
+			});
+			$('#buttonMenu').on('click',function(){
+				// Hide or show the transport option based on the value of the check-in/out field
+				if( $(':radio[name="check_inout"]:checked').val() == 'out' ) {
+					$('#menuTransport').show();
+				} else {
+					$('#menuTransport').hide();
+				}
+				$('#menu').popup({'history':false});
+				$('#menu').popup('open');
+			});
+			$('#group').on('change',function(){
+				loadProductsByGroup($(this).find('option:selected').text());
+			});
+			$('#product').on('change',function(){
+				$('#unit').html($(this).find('option:selected').data('unit'));
+			});
+			$('#addAction').on('click',addLine);
+			$('#lines').on('click','.ui-icon-delete',function(){
+				removeLine($(this));
+			});
+			$('#menuSave').on('click',function(){
+				saveInfo();
+			});
+			$('#menuTransport').on('click',function(){
+				if( $(':radio[name="check_inout"]:checked').val() == 'out' ) {
+					saveInfo('transport');
+				} else {
+					app.showAlert('Transportdokument kan kun lages når varene sjekkes ut.');
+					$('#menu').popup('close');
+				}
+			});
+
+			// The location is a combo - hide the text input
+			$('#switchLocation').on('click',function(){
+				switchSelectText('location');
+			});
+			$('div.location_text').hide();
+
+			// The project is a combo - hide the text inputs
+			$('#switchProject').on('click',function(){
+				switchSelectText('project');
+			});
+			$('div.project_text').hide();
+
+			// If a project is selected, set the project number, name and location
+			$('#fk_project').on('change',function(){
+				p = lookups.project.rows[$(this).val()];
+				if( typeof p == 'undefined' ) {
+					p = { 'number': '', 'description': '', 'location': '' };
+				}
+				$('#project_number').val( p.number );
+				$('#project_description').val( p.description );
+				$('#project_location').val( p.location );
+			});
+
+			// Prevent this from happening twice
+			loaded = true;
+		} catch(error){
+			app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' +error.message);
+		}
+	}
+});
+</script>

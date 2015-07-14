@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="format-detection" content="telephone=no" />        
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1" />                 
+        
+        <title>DynaForm</title>
+                               
+        <link href="css/jquery.mobile-1.4.4.min.css" rel="stylesheet" type="text/css" />
+        <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+        <link href="css/bootstrap-theme.min.css" rel="stylesheet" type="text/css" />
+        <link href="css/font-awesome.css" rel="stylesheet" type="text/css" />
+        <link href="css/datepicker.css" rel="stylesheet" type="text/css" />    
+        <link href="css/index.css" rel="stylesheet" type="text/css" />                
+    </head>
+
+    <body>              
+        <div data-role="page" id="loginPage">                        
+            <div data-role="content">                
+                <div class="textAlignCenter">
+                    <img src="img/appLogo.png" />
+                    <p id="app-version">v.1.3.0403</p>
+                    <hr />
+                </div>
+
+                <form id="loginForm">            
+                    <div id="serverAddressField" class="ui-field-contain">
+                        <label for="serverAddress">Server:</label>                                               
+                        <input type="text" id="serverAddress" data-clear-btn="true" 
+                            placeholder="Server Address" required value="" />
+                    </div>
+            
+                    <div class="ui-field-contain">
+                        <label for="userName">User:</label>
+                        <input type="text" id="userName" data-clear-btn="true" 
+                            placeholder="User Name" required value="" />
+                    </div>
+                                        
+                    <div class="ui-field-contain">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" data-clear-btn="true" 
+                            placeholder="Password" required value="test" />                           
+                    </div>
+            
+                    <div id="loginErrorMessage" class="error"></div>                    
+
+                    <button type="submit" id="loginButton" 
+                        class="ui-btn ui-btn-inline floatRight">OK</button>            
+                </form>   
+            </div>                 
+        </div>       
+        
+        <div data-role="page" id="syncPage">
+            <div data-role="header">                   
+                <h1>Oppsett</h1>     
+                <a href="#" id="buttonMain" data-icon="home" class="ui-btn-right">Main</a>                                    
+            </div>
+
+            <div data-role="content">                    
+                <button id="downloadSettingsButton" class="ui-btn ui-btn-corner-all ui-icon-arrow-d ui-btn-icon-right">
+                    Last ned innstillinger   
+                    <br/>
+                    <span id="downloadSettingsStatusMessage" class="statusMessage"></span>
+                </button>                                
+            </div>                         
+        </div>       
+                                              
+        <script type="text/javascript" src="js/libs/jquery/jquery-1.11.1.min.js"></script>         
+        <script type="text/javascript" src="js/libs/bootstrap/bootstrap.min.js"></script>  
+        <script type="text/javascript" src="js/libs/bootstrap/bootstrap-datepicker.js"></script>  
+        <script type="text/javascript" src="js/libs/bootstrap/modal.js"></script>  
+        <script type="text/javascript" src="js/libs/jquery-mobile/jquery.mobile-1.4.4.min.js"></script>                   
+        <script type="text/javascript" src="js/libs/router.js"></script>       
+        <script type="text/javascript" src="js/libs/jquery.sha1.js"></script>
+        <script type="text/javascript" src="js/libs/jquery.md5.js"></script>     
+        <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false"></script>
+
+        <script type="text/javascript" src="js/Database.js"></script>      
+        <script type="text/javascript" src="js/Synchronize.js"></script> 
+        <script type="text/javascript" src="js/Constants.js"></script> 
+        <script type="text/javascript" src="js/test.js"></script> 
+
+        <script type="text/javascript" src="js/services/ServiceHandler.js"></script>   
+        <script type="text/javascript" src="js/services/LoginService.js"></script>   
+        <script type="text/javascript" src="js/services/DownloadDatabaseService.js"></script>
+        <script type="text/javascript" src="js/services/UploadDatabaseService.js"></script>
+        <script type="text/javascript" src="js/services/FileService.js"></script>
+        <script type="text/javascript" src="js/services/GpsService.js"></script>
+
+        <script type="text/javascript" src="js/helpers/FileHelper.js"></script>
+        <script type="text/javascript" src="js/helpers/LoaderHelper.js"></script>
+        <script type="text/javascript" src="js/helpers/FifoFixedArrayHelper.js"></script> 
+        <script type="text/javascript" src="js/helpers/DateHelper.js"></script>
+        <script type="text/javascript" src="js/helpers/LogHelper.js"></script>
+        <script type="text/javascript" src="js/helpers/ConnectionHelper.js"></script>        
+        <script type="text/javascript" src="js/helpers/CameraHelper.js"></script>
+        <script type="text/javascript" src="js/helpers/GeolocationHelper.js"></script>
+        <script type="text/javascript" src="js/helpers/UuidHelper.js"></script>               
+        
+        <script type="text/javascript" src="js/app.js"></script>  
+        
+        <script type="text/javascript">            
+            $(document).on('pageinit', '#loginPage', 
+                function() {                    
+                    $('#loginForm').on('submit', app.logIn);                
+                });
+                            
+            $(document).on('pageinit', '#syncPage',
+                function() {             
+                    $('#downloadSettingsButton').on('click', synchronize.downloadTables);                      
+                    var lastDownloadedTableInfo = localStorage.getItem(app.localStorageKeys.sync.lastDownloadedTableInfo);
+                    if (lastDownloadedTableInfo !== null && lastDownloadedTableInfo !== undefined) {
+                        $('#downloadSettingsStatusMessage').text(lastDownloadedTableInfo);                    
+                    }    
+
+                    $('#buttonMain').on('click', function() {
+                        app.loadFile(app.downloadedFilePaths.main.index); 
+                    });
+                });                                                                                                                                                                                                 
+        </script>
+    </body>
+</html>

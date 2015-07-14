@@ -1,0 +1,148 @@
+<div data-role="header">
+	<h1>Deviation</h1>
+	<a href="#" id="buttonMain" data-icon="back" class="ui-btn-left">Tilbake</a>
+	<a href="#" id="buttonMenu" data-icon="bars" class="ui-btn-right">Meny</a>
+	<div data-role="popup" id="menu" data-overlay-theme="b">
+		<ul data-role="listview" data-inset="true" style="min-width: 210px;">
+			<li data-role="list-divider">Meny</li>			
+			<li><a id="menuEdit">Rediger</a></li>
+			<li><a id="menuArchive">Arkiver</a></li>
+			<li><a id="menuDelete">Fjern</a></li>
+		</ul>
+	</div>
+</div>
+
+<div data-role="content">
+	<form>		        
+        <label for="user_name">User Name</label>
+		<input type="text" name="user_name" id="user_name">
+        
+		<label for="description">Description</label>
+		<textarea name="description" id="description"></textarea>         
+        
+        <img id="picture" width="100%" />        
+	</form>
+</div>
+
+<script>
+// info will hold the deviation information
+var info = {};
+
+function showInfo() {
+    $('#user_name').val(info.user_name);
+    $('#description').text(info.description);        
+    $('#picture').attr('src', app.getPhotoPath(info.picture));
+    	              
+	// We're viewing
+	$(':input').prop('disabled', true);
+}
+
+function loadInfo(id) {
+	// Load the record, call showInfo() when done      
+	database.db.transaction(
+		function(tx) {
+			// Note: || is to concatenate strings in sqlite
+			tx.executeSql(
+				'SELECT d.*, u.username FROM deviation d LEFT JOIN user u ON d.fk_user = u.id WHERE d.id = ?',
+				[id],
+				function(tx, result) {
+					try {                                         
+						r = result.rows.item(0);
+						info = {
+							'id' : r.id,
+							'fk_user' : r.fk_user,
+                            'user_name': r.username,														
+							'description': r.description,							
+							'picture' : r.picture							
+						};	                        
+					} catch (e) {                           
+						alert('error: ' + e.message);
+					}
+				}
+			);
+		},
+		function(error) {
+			app.showAlert('Det oppsto en feil: ' + error.message);
+			logHelper.error('deviation/index.html', 'loadInfo', error.message);
+		},
+		function(success) {
+			showInfo();
+		}
+	);
+}
+
+function deleteInfo() {
+	database.db.transaction(
+		function(tx) {
+			tx.executeSql('DELETE FROM deviation WHERE id = ?', [app.id]);		
+		},
+		function(error) {
+			app.showAlert('Det oppsto en feil: ' + error.message);
+			logHelper.error('deviation/index.html', 'deleteInfo', error.message);
+		},
+		function(success) {
+			app.showAlert('Informasjonen er nå fjernet.');
+			delete app.id;
+			app.loadFile('main/index.html');
+		}
+	);
+}
+
+function archiveInfo() {    
+	database.db.transaction(
+		function(tx) {
+			tx.executeSql('UPDATE deviation SET archived = datetime() WHERE id = ?', [app.id]);
+		},
+		function(error) {
+			app.showAlert('Det oppsto en feil: ' + error.message);
+			logHelper.error('deviation/index.html', 'archiveInfo', error.message);
+		},
+		function(success) {
+			app.showAlert('Informasjonen er nå arkivert.');
+			delete app.id;
+			app.loadFile('main/index.html');
+		}
+	);
+}
+
+var loaded = false;
+$(document).ready(function() {
+	if(!loaded) {
+		try {                               
+			// Load and display the document             
+			loadInfo(app.id);                                                      
+            
+			// Register actions
+			$('#buttonMain').on('click',function() {
+				app.loadFile('main/index.html');
+			});
+            
+			$('#buttonMenu').on('click',function() {
+				$('#menu').popup({'history': false});
+				$('#menu').popup('open');
+			});
+
+			$('#menuEdit').on('click', function() {
+				app.loadFile('deviation/edit.html');
+			});                        
+            
+			$('#menuArchive').on('click',function() {                                
+				if (confirm('Er du sikker du vil arkivere informasjonen?')) {
+					archiveInfo();
+				}
+			});
+            
+			$('#menuDelete').on('click',function() {
+				if (confirm('Er du sikker du vil fjerne informasjonen?')) {
+					deleteInfo();
+				}
+			});
+
+			// Prevent this from happening twice
+			loaded = true;
+		} catch(error) {
+			app.showAlert('Det oppsto en alvorlig feil. Vennligst ta kontakt med drift: ' + error.message);
+		}
+	}
+});
+</script>
